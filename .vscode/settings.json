@@ -1,0 +1,19 @@
+{
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.autopep8"
+    },
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "../tests",
+        "-p",
+        "test_*.py"
+    ],
+    "python.testing.cwd": "./src",
+    "launch": {
+        "configurations": [],
+        "compounds": []
+    },
+    "python.linting.enabled": true,
+    "python.linting.mypyEnabled": true
+}

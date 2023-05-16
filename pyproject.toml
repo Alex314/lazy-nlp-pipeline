@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lazy-nlp-pipeline"
+version = "0.0.1"
+authors = [{ name = "Alex", email = "alex3.14mart@gmail.com" }]
+description = "Natural Language Processing lib inspired by Spacy"
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "pymorphy3",
+    "spacy",
+    "tqdm",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/Alex314/lazy-nlp-pipeline"
+"Bug Tracker" = "https://github.com/Alex314/lazy-nlp-pipeline/issues"
+
+[tool.hatch.envs.test]
+type = "container"
+
+[tool.hatch.envs.test.scripts]
+test = "python -m unittest tests/test_* -v"
+
+[[tool.hatch.envs.test.matrix]]
+python = ["3.10", "3.11"]
