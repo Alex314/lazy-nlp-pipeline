@@ -4,7 +4,9 @@ from .lazy_nlp_pipeline import (
     DocPosition,
     Span,
     Token,
+)
 
+from .patterns import (
     Pattern,
     TokenPattern,
 )
