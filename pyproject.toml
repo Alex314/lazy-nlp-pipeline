@@ -15,6 +15,7 @@ classifiers = [
 ]
 dependencies = [
     "pymorphy3",
+    "pymorphy3-dicts-uk",
     "spacy",
     "tqdm",
 ]
@@ -31,3 +32,7 @@ test = "python -m unittest tests/test_* -v"
 
 [[tool.hatch.envs.test.matrix]]
 python = ["3.10", "3.11"]
+
+[[tool.mypy.overrides]]
+module = "pymorphy3"
+ignore_missing_imports = true
