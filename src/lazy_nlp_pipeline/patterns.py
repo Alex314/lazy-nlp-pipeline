@@ -2,8 +2,9 @@ from __future__ import annotations
 from collections.abc import Generator, Sequence
 from typing import TYPE_CHECKING
 
+
 if TYPE_CHECKING:
-    from lazy_nlp_pipeline.lazy_nlp_pipeline import DocPosition, Span
+    from lazy_nlp_pipeline.doc import Doc, DocPosition, Span
 
 
 class RepeatedPattern:
@@ -131,8 +132,9 @@ class TokenPattern(RepeatablePattern):
                     if token_text != pattern_text:
                         return
                 case 'lemma':
-                    if token.lemma != self.lemma:
-                        return
+                    raise NotImplementedError()
+                    # if token.lemma != self.lemma:
+                    #     return
                 case 'isalpha':
                     if token.text.isalpha() != self.isalpha:
                         return
@@ -223,7 +225,7 @@ class Pattern(RepeatablePattern):
         """Yield all matches within the Doc"""
         # TODO: check guards w\o tokenizing
 
-        for token in doc:
+        for token in doc.tokens:
             if token.start_char == 0:
                 position = token.start_position
                 for matched, next_token in self.match_from(position, forward=forward):

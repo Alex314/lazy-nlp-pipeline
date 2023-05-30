@@ -1,33 +1,32 @@
 from __future__ import annotations
 from collections.abc import Iterable
 import dataclasses
-from typing import TYPE_CHECKING
 
 from pymorphy3 import MorphAnalyzer
 
-
-if TYPE_CHECKING:
-    from lazy_nlp_pipeline import Doc
+from lazy_nlp_pipeline.doc import Doc
 
 
 class WordsAnalyzer:
-    attributes_provided = ['words']
+    targets = [
+        (Doc, 'words'),
+    ]
 
     def __init__(self):
         self.morph_uk = MorphAnalyzer(lang='uk')
         self.morph_ru = MorphAnalyzer(lang='ru')
 
-    def get_attribute(self, doc: Doc, name: str):
+    def eval_attribute(self, target: Doc, name: str) -> None:
         if name == 'words':
-            return self.get_words(doc)
+            self.eval_words(target)
 
-    def get_words(self, doc: Doc):
-        ans = []
-        for t in doc:
+    def eval_words(self, doc: Doc):
+        if 'words' not in doc.lazy_attributes:
+            doc.lazy_attributes['words'] = []
+        for t in doc.tokens:
             words = self.words_from_token(t)
-            words = Word.squeeze(words)
-            ans.extend(words)
-        return ans
+            doc.lazy_attributes['words'].extend(words)
+        doc.lazy_attributes['words'] = Word.squeeze(doc.lazy_attributes['words'])
 
     def words_from_token(self, token, prefix='', start_char=None):
         if start_char is None:
