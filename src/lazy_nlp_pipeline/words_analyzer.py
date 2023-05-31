@@ -3,22 +3,84 @@ from collections.abc import Iterable
 import dataclasses
 
 from pymorphy3 import MorphAnalyzer
+from pymorphy3.units.by_shape import PunctuationAnalyzer
+from pymorphy3.units.by_analogy import KnownSuffixAnalyzer
+from pymorphy3.units.unkn import UnknAnalyzer
+from lazy_nlp_pipeline.base_classes import WithLazyAttributes
 
 from lazy_nlp_pipeline.doc import Doc
+from lazy_nlp_pipeline.tokenizer import Token
 
 
 class WordsAnalyzer:
-    targets = [
+    targets: list[tuple[type[WithLazyAttributes], str]] = [
         (Doc, 'words'),
+        (Token, 'words_starting_here'),
+        (Token, 'words_ending_here'),
+        (Token, 'words'),
     ]
+    DEFAULT_WORD_CHARS = {
+        'uk': "'-.абвгдежзийклмнопрстуфхцчшщьюяєіїґ",
+        'ru': "'-.0123456789абвгдежзийклмнопрстуфхцчшщъыьэюяё’"
+    }
 
-    def __init__(self):
-        self.morph_uk = MorphAnalyzer(lang='uk')
-        self.morph_ru = MorphAnalyzer(lang='ru')
+    def __init__(self,
+                 lang: str = 'uk',
+                 word_chars: str | None = None,
+                 exclude_analyzers=(PunctuationAnalyzer, KnownSuffixAnalyzer, UnknAnalyzer),
+                 ):
+        self.lang = lang
+        if word_chars is None:
+            word_chars = self.DEFAULT_WORD_CHARS[lang]
+        self.word_chars = word_chars
+        units = [
+            u if not isinstance(u, list)
+                else [su for su in u if not isinstance(su, exclude_analyzers)]
+            for u in MorphAnalyzer(lang=lang)._config_value('DEFAULT_UNITS', MorphAnalyzer.DEFAULT_UNITS)
+            if not isinstance(u, exclude_analyzers)
+        ]
+        self.morph = MorphAnalyzer(lang=lang, units=units)
 
-    def eval_attribute(self, target: Doc, name: str) -> None:
-        if name == 'words':
-            self.eval_words(target)
+    def eval_attribute(self, target: Doc | Token, name: str) -> None:
+        match target, name:
+            # TODO: remove `ignore` when mypy will support tuples in `case`
+            # https://github.com/python/mypy/issues/12364
+            case Doc as doc, 'words':
+                self.eval_words(doc)  # type: ignore
+            case Token as t, 'words_starting_here':
+                self.eval_words_forward(t)  # type: ignore
+            case Token as t, 'words_ending_here':
+                self.eval_words_backward(t)  # type: ignore
+            case Token as t, 'words':
+                self.eval_token_words(t)  # type: ignore
+
+    def eval_words_forward(self, t: Token, prefix: str = '',
+                           start_token: Token | None = None, start_char: int | None = None):
+        if start_token is None:
+            start_token = t
+        if 'words_starting_here' not in start_token.lazy_attributes:
+            start_token.lazy_attributes['words_starting_here'] = []
+        if any(ch not in self.word_chars for ch in t.text.lower()):
+            return
+        if start_char is None:
+            start_char = t.start_char
+        prefix += t.text
+        words = [self.match_to_word(m, start_char) for m in self.morph.parse(prefix)]
+        start_token.lazy_attributes['words_starting_here'].extend(words)
+        start_token.lazy_attributes['words_starting_here'] = Word.squeeze(
+            start_token.lazy_attributes['words_starting_here'])
+        if t.next_token is None:
+            return
+        self.eval_words_forward(t.next_token, prefix=prefix,
+                                start_token=start_token, start_char=start_char)
+
+    def eval_words_backward(self, t: Token):
+        raise NotImplementedError
+        ...
+
+    def eval_token_words(self, t: Token):
+        raise NotImplementedError
+        ...
 
     def eval_words(self, doc: Doc):
         if 'words' not in doc.lazy_attributes:
@@ -33,24 +95,25 @@ class WordsAnalyzer:
             start_char = token.start_char
         ans = []
         prefix += token.text.lower()
-        for lang, morph in [('uk', self.morph_uk), ('ru', self.morph_ru)]:
-            matched_prefixes = []
-            for match in morph.iter_known_word_parses(prefix):
-                if match.word == prefix:
-                    if prefix in matched_prefixes:
-                        continue
-                    ans.extend([self.match_to_word(
-                        m, start_char=start_char, lang=lang) for m in morph.parse(prefix)])
-                    matched_prefixes.append(prefix)
-                else:
-                    if token.next_token is not None:
-                        ans.extend(self.words_from_token(
-                            token.next_token, prefix=prefix, start_char=start_char))
-                    break
+        matched_prefixes = []
+        for match in self.morph.iter_known_word_parses(prefix):
+            if match.word == prefix:
+                if prefix in matched_prefixes:
+                    continue
+                ans.extend([self.match_to_word(
+                    m, start_char=start_char, lang=self.lang) for m in self.morph.parse(prefix)])
+                matched_prefixes.append(prefix)
+            else:
+                if token.next_token is not None:
+                    ans.extend(self.words_from_token(
+                        token.next_token, prefix=prefix, start_char=start_char))
+                break
         return ans
 
-    def match_to_word(self, match, start_char, lang=None):
-        return Word(match.word, start_char, lemma=match.normal_form, pos=match.tag.POS, lang=lang, score=match.score)
+    def match_to_word(self, match, start_char: int):
+        return Word(match.word, start_char,
+                    lemma=match.normal_form, pos=match.tag.POS,
+                    lang=self.lang, score=match.score)
 
 
 @dataclasses.dataclass(frozen=True)

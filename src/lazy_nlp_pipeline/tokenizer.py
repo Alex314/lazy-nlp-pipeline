@@ -1,12 +1,18 @@
 from __future__ import annotations
 import logging
 import re
+from typing import TYPE_CHECKING
+from lazy_nlp_pipeline.base_classes import WithLazyAttributes
 
 from lazy_nlp_pipeline.doc import Doc, DocPosition, Span
 
 
+if TYPE_CHECKING:
+    from lazy_nlp_pipeline.nlp import NLP
+
+
 class Tokenizer:
-    targets = [
+    targets: list[tuple[type[WithLazyAttributes], str]] = [
         (Doc, 'tokens'),
     ]
 
@@ -44,7 +50,7 @@ class Tokenizer:
 
         tokens: list[Token] = []
         for start, end in zip(token_boundaries[:-1], token_boundaries[1:]):
-            t = Token(text=doc.text[start:end], doc=doc,
+            t = Token(nlp=doc.nlp, text=doc.text[start:end], doc=doc,
                       start_char=start, end_char=end)
             if len(tokens) > 0:
                 tokens[-1].next_token = t
@@ -53,13 +59,15 @@ class Tokenizer:
         doc.lazy_attributes['tokens'] = tokens
 
 
-class Token:
+class Token(WithLazyAttributes):
     def __init__(self,
+                 nlp: NLP,
                  text: str,
                  doc: Doc,
                  start_char: int,
                  end_char: int,
                  ):
+        super().__init__(nlp)
         self.text = text
         self.doc = doc
         self.start_char = start_char

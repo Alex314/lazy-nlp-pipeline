@@ -9,10 +9,11 @@ from lazy_nlp_pipeline.words_analyzer import WordsAnalyzer
 
 
 class NLP:
-    DEFAULT_ANALYZERS = [
+    DEFAULT_ANALYZERS = (
         Tokenizer(),
-        WordsAnalyzer(),
-    ]
+        WordsAnalyzer(lang='uk'),
+        WordsAnalyzer(lang='ru'),
+    )
 
     def __init__(self,
                  project_name: str = 'default_project',
@@ -20,7 +21,7 @@ class NLP:
                  ):
         self.project_name = project_name
         analyzers_dict_factory: Callable[[], defaultdict] = partial(defaultdict, list)
-        self.pipes: defaultdict[type, defaultdict[str, list[Any]]  # TODO: list[Analyzer]
+        self.analyzers: defaultdict[type, defaultdict[str, list[Any]]  # TODO: list[Analyzer]
                                 ] = defaultdict(analyzers_dict_factory)
         if analyzers is None:
             analyzers = []
@@ -30,11 +31,11 @@ class NLP:
     def add_analyzer(self, analyzer) -> None:
         """Saves factories for custom attributes of document-related classes"""
         for target_class, target_attribute in analyzer.targets:
-            self.pipes[target_class][target_attribute].append(analyzer)
+            self.analyzers[target_class][target_attribute].append(analyzer)
 
     def eval_lazy_attribute(self, target, attribute_name: str) -> None:
         is_attr_evaluated = False
-        for target_class, attr_factories in self.pipes.items():
+        for target_class, attr_factories in self.analyzers.items():
             if not isinstance(target, target_class):
                 continue
             for analyzer in attr_factories[attribute_name]:
@@ -75,7 +76,7 @@ class NLP:
 
     def __call__(self, text: str) -> Doc:
         """Create Doc from str"""
-        return Doc(text, self)
+        return Doc(self, text)
 
     def __repr__(self) -> str:
         flags: list[str] = []

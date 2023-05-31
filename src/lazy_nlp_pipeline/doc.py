@@ -2,26 +2,21 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
+from lazy_nlp_pipeline.base_classes import WithLazyAttributes
+
 
 if TYPE_CHECKING:
     from lazy_nlp_pipeline.nlp import NLP
     from lazy_nlp_pipeline.tokenizer import Token
 
 
-class Doc:
+class Doc(WithLazyAttributes):
     def __init__(self,
-                 text: str,
                  nlp: NLP,
+                 text: str,
                  ):
+        super().__init__(nlp)
         self.text = text
-        self.nlp = nlp
-        self.lazy_attributes: dict[str, Any] = {}
-
-    def __getattr__(self, name: str):
-        if name in self.lazy_attributes:
-            return self.lazy_attributes[name]
-        self.nlp.eval_lazy_attribute(self, name)
-        return self.lazy_attributes[name]
 
     def __getitem__(self, key) -> Span:
         """Get character-level Span of this Doc"""
