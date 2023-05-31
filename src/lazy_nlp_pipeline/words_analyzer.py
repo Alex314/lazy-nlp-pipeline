@@ -35,7 +35,7 @@ class WordsAnalyzer:
         self.word_chars = word_chars
         units = [
             u if not isinstance(u, list)
-                else [su for su in u if not isinstance(su, exclude_analyzers)]
+            else [su for su in u if not isinstance(su, exclude_analyzers)]
             for u in MorphAnalyzer(lang=lang)._config_value('DEFAULT_UNITS', MorphAnalyzer.DEFAULT_UNITS)
             if not isinstance(u, exclude_analyzers)
         ]
@@ -86,29 +86,8 @@ class WordsAnalyzer:
         if 'words' not in doc.lazy_attributes:
             doc.lazy_attributes['words'] = []
         for t in doc.tokens:
-            words = self.words_from_token(t)
-            doc.lazy_attributes['words'].extend(words)
+            doc.lazy_attributes['words'].extend(t.words_starting_here)
         doc.lazy_attributes['words'] = Word.squeeze(doc.lazy_attributes['words'])
-
-    def words_from_token(self, token, prefix='', start_char=None):
-        if start_char is None:
-            start_char = token.start_char
-        ans = []
-        prefix += token.text.lower()
-        matched_prefixes = []
-        for match in self.morph.iter_known_word_parses(prefix):
-            if match.word == prefix:
-                if prefix in matched_prefixes:
-                    continue
-                ans.extend([self.match_to_word(
-                    m, start_char=start_char, lang=self.lang) for m in self.morph.parse(prefix)])
-                matched_prefixes.append(prefix)
-            else:
-                if token.next_token is not None:
-                    ans.extend(self.words_from_token(
-                        token.next_token, prefix=prefix, start_char=start_char))
-                break
-        return ans
 
     def match_to_word(self, match, start_char: int):
         return Word(match.word, start_char,
