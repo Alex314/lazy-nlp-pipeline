@@ -1,6 +1,6 @@
 from __future__ import annotations
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, overload
 
 from lazy_nlp_pipeline.base_classes import WithLazyAttributes
 
@@ -18,20 +18,23 @@ class Doc(WithLazyAttributes):
         super().__init__(nlp)
         self.text = text
 
-    def __getitem__(self, key) -> Span:
+    @overload
+    def __getitem__(self, key: int) -> DocPosition: ...
+
+    @overload
+    def __getitem__(self, key: slice) -> Span: ...
+
+    def __getitem__(self, key: int | slice) -> DocPosition | Span:
         """Get character-level Span of this Doc"""
         match key:
-            # case int():
-            #     ...
-            # TODO: if int - return DocPosition
+            case int():
+                return DocPosition(self, key)
             case slice(start=lower, stop=upper):
                 if lower is None:
                     lower = 0
                 if upper is None:
-                    upper = -1
-                else:
-                    upper -= 1
-                return Span(doc=self, start_char=self[lower].start_char, end_char=self[upper].end_char)
+                    upper = len(self)
+                return Span(doc=self, start_char=lower, end_char=upper)
         return NotImplemented
 
     def __repr__(self) -> str:

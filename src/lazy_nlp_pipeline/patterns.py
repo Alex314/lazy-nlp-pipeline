@@ -2,9 +2,12 @@ from __future__ import annotations
 from collections.abc import Generator, Sequence
 from typing import TYPE_CHECKING
 
+from lazy_nlp_pipeline.doc import DocPosition
+from lazy_nlp_pipeline.words_analyzer import Word
+
 
 if TYPE_CHECKING:
-    from lazy_nlp_pipeline.doc import Doc, DocPosition, Span
+    from lazy_nlp_pipeline.doc import Doc, Span
 
 
 class RepeatedPattern:
@@ -71,7 +74,6 @@ class RepeatablePattern:
 class TokenPattern(RepeatablePattern):
     def __init__(self,
                  text: str | None = None,
-                 lemma: str | None = None,
 
                  ignore_case: bool = False,
 
@@ -87,10 +89,6 @@ class TokenPattern(RepeatablePattern):
         self.text = text
         if text is not None:
             self.to_check.append('text')
-
-        self.lemma = lemma
-        if lemma is not None:
-            self.to_check.append('lemma')
 
         self.ignore_case = ignore_case
 
@@ -127,14 +125,10 @@ class TokenPattern(RepeatablePattern):
                     pattern_text = self.text
                     token_text = token.text
                     if self.ignore_case:
-                        pattern_text = pattern_text.lower()
+                        pattern_text = pattern_text.lower()  # type: ignore
                         token_text = token_text.lower()
                     if token_text != pattern_text:
                         return
-                case 'lemma':
-                    raise NotImplementedError()
-                    # if token.lemma != self.lemma:
-                    #     return
                 case 'isalpha':
                     if token.text.isalpha() != self.isalpha:
                         return
@@ -145,10 +139,10 @@ class TokenPattern(RepeatablePattern):
                     if token.text.isspace() != self.isspace:
                         return
                 case 'min_len':
-                    if len(token.text) < self.min_len:
+                    if len(token.text) < self.min_len:  # type: ignore
                         return
                 case 'max_len':
-                    if len(token.text) > self.max_len:
+                    if len(token.text) > self.max_len:  # type: ignore
                         return
                 case _:
                     raise Exception(f'Unexpected rule to check: {rule!r}')
@@ -166,8 +160,6 @@ class TokenPattern(RepeatablePattern):
         flags = []
         if self.text is not None:
             flags.append(f'text={self.text!r}')
-        if self.lemma is not None:
-            flags.append(f'lemma={self.lemma!r}')
         if self.isalpha is not None:
             flags.append('isalpha' if self.isalpha else '~isalpha')
         if self.isnumeric is not None:
@@ -178,6 +170,77 @@ class TokenPattern(RepeatablePattern):
             flags.append(f'len={self.min_len}:{self.max_len}')
         ans = f'{type(self).__name__}[{" ".join(flags)}]'
         return ans
+
+
+class WordPattern(RepeatablePattern):
+    def __init__(self,
+                 text: str | None = None,
+                 ignore_case: bool = False,
+                 lemma: str | None = None,
+                 pos: str | None = None,
+                 lang: str | None = None,
+                 ):
+        self.to_check = []
+
+        self.text = text
+        if text is not None:
+            self.to_check.append('text')
+        self.ignore_case = ignore_case
+
+        self.lemma = lemma
+        if lemma is not None:
+            self.to_check.append('lemma')
+        self.pos = pos
+        if pos is not None:
+            self.to_check.append('pos')
+        self.lang = lang
+        if lang is not None:
+            self.to_check.append('lang')
+
+    def match_from(self, doc_position: DocPosition,
+                   forward: bool = True,
+                   ) -> Generator[tuple[Span, DocPosition], None, None]:
+        """Match pattern starting from doc_position either forward or backward"""
+        if forward:
+            token = doc_position.token_ahead
+            if token is None:
+                return
+            words = token.words_starting_here
+        else:
+            token = doc_position.token_behind
+            if token is None:
+                return
+            words = token.words_ending_here
+        for w in words:
+            if self.pass_guards(w):
+                next_position = doc_position.doc[w.start_char]
+                if forward:
+                    next_position = doc_position.doc[w.end_char]
+                yield doc_position.doc[w.start_char:w.end_char], next_position
+
+    def pass_guards(self, word: Word) -> bool:
+        for rule in self.to_check:
+            match rule:
+                case 'text':
+                    pattern_text = self.text
+                    word_text = word.text
+                    if self.ignore_case:
+                        pattern_text = pattern_text.lower()  # type: ignore
+                        word_text = word_text.lower()
+                    if word_text != pattern_text:
+                        return False
+                case 'lemma':
+                    if word.lemma != self.lemma:
+                        return False
+                case 'pos':
+                    if word.pos != self.pos:
+                        return False
+                case 'lang':
+                    if word.lang != self.lang:
+                        return False
+                case _:
+                    raise Exception(f'Unexpected rule to check: {rule!r}')
+        return True
 
 
 class OrPattern(RepeatablePattern):

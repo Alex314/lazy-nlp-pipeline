@@ -1,6 +1,6 @@
 import unittest
 
-from lazy_nlp_pipeline import NLP, Pattern as P, TokenPattern as TP
+from lazy_nlp_pipeline import (NLP, Pattern as P, TokenPattern as TP, WordPattern as WP)
 
 
 class TestPatterns(unittest.TestCase):
@@ -8,12 +8,14 @@ class TestPatterns(unittest.TestCase):
         self.nlp = NLP('test_project')
 
     def assert_pattern_cases(self, pattern, cases):
-        for s, expected in cases:
-            with self.subTest(source_str=s, expected_matches=expected):
-                matches = self.nlp.match_patterns(
-                    patterns=[pattern], texts=[s])
-                str_matches = [m.text for m in matches]
-                self.assertCountEqual(str_matches, expected)
+        # TODO: test forward and backward
+        for backward in [False, True]:
+            for s, expected in cases:
+                with self.subTest(backward=backward, source_str=s, expected_matches=expected):
+                    matches = self.nlp.match_patterns(
+                        patterns=[pattern], texts=[s], backward=backward)
+                    str_matches = [m.text for m in matches]
+                    self.assertCountEqual(str_matches, expected)
 
     def test_token_sequence(self):
         pattern = P(
@@ -121,10 +123,23 @@ class TestPatterns(unittest.TestCase):
 
         self.assert_pattern_cases(pattern, src_match_pairs)
 
-    @unittest.skip("refactoring lemmatization")
+    def test_uk_lemma(self):
+        pattern = P(
+            WP(lemma='неприбутковий', lang='uk'),
+            WP(pos='NOUN', lang='uk'),
+        )
+
+        src_match_pairs = [
+            ('Вікіпе́дія (англ. Wikipedia) — загальнодоступна неприбуткова багатомовна онлайн-енциклопедія, '
+             'якою опікується неприбуткова організація «Фонд Вікімедіа».',
+             ['неприбуткова організація']),
+        ]
+
+        self.assert_pattern_cases(pattern, src_match_pairs)
+
     def test_ru_lemma(self):
         pattern = P(
-            TP(lemma='общедоступный'),
+            WP(lemma='общедоступный', lang='ru'),
             TP(isspace=False)[1:],
         )
 

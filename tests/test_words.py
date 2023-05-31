@@ -1,6 +1,6 @@
 import unittest
 
-from lazy_nlp_pipeline import NLP
+from lazy_nlp_pipeline import NLP, Word
 
 
 class TestWords(unittest.TestCase):
@@ -10,5 +10,6 @@ class TestWords(unittest.TestCase):
     def test_token_words(self):
         doc = self.nlp('Красиво як-не-як')
         for t in doc.tokens:
-            with self.subTest(t=t):
-                self.assertEqual(t.words_starting_here, [])
+            for w in t.words_starting_here:
+                with self.subTest(token=t, word=w):
+                    self.assertIsInstance(w, Word)

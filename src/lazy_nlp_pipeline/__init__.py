@@ -19,4 +19,5 @@ from .words_analyzer import (
 from .patterns import (
     Pattern,
     TokenPattern,
+    WordPattern,
 )

@@ -89,6 +89,7 @@ class Token(WithLazyAttributes):
     def __repr__(self) -> str:
         flags = [
             f'{self.start_char}:{self.end_char}',
+            ' '.join(self.lazy_attributes),
         ]
         ans = f'{type(self).__name__}({self.text!r})[{" ".join(flags)}]'
         return ans
