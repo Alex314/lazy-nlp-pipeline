@@ -1,20 +1,15 @@
 import unittest
 
-from lazy_nlp_pipeline import NLP
-from lazy_nlp_pipeline.words_analyzer import WordsAnalyzer, Word
+from lazy_nlp_pipeline import NLP, Word
 
 
 class TestWords(unittest.TestCase):
     def setUp(self):
-        self.nlp = NLP('test_project')
-        self.nlp.add_doc_pipe(WordsAnalyzer())
-
-    def test_basic(self):
-        text = 'Кілька слів. Ще слова'
-        doc = self.nlp(text)
-        words = doc.words
-        for w in words:
-            self.assertIsInstance(w, Word)
-        self.assertEqual(words[0].text, "Кілька".lower())
-        for w in words:
-            self.assertLessEqual(w.score, 1.0)
+        self.nlp = NLP('test_words')
+    
+    def test_token_words(self):
+        doc = self.nlp('Красиво як-не-як')
+        for t in doc.tokens:
+            for w in t.words_starting_here:
+                with self.subTest(token=t, word=w):
+                    self.assertIsInstance(w, Word)

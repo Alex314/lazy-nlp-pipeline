@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lazy-nlp-pipeline"
-version = "0.0.1"
+version = "0.0.2"
 authors = [{ name = "Alex", email = "alex3.14mart@gmail.com" }]
 description = "Natural Language Processing lib inspired by Spacy"
 readme = "README.md"
@@ -34,5 +34,7 @@ test = "python -m unittest tests/test_* -v"
 python = ["3.10", "3.11"]
 
 [[tool.mypy.overrides]]
-module = "pymorphy3"
+module = "pymorphy3.*"
 ignore_missing_imports = true
+# TODO: generate stubs
+# https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-library-stubs-or-py-typed-marker

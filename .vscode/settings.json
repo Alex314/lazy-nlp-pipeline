@@ -10,10 +10,4 @@
         "test_*.py"
     ],
     "python.testing.cwd": "./src",
-    "launch": {
-        "configurations": [],
-        "compounds": []
-    },
-    "python.linting.enabled": true,
-    "python.linting.mypyEnabled": true
 }

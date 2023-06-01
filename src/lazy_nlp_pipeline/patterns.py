@@ -1,9 +1,14 @@
 from __future__ import annotations
+from abc import ABC, abstractmethod
 from collections.abc import Generator, Sequence
 from typing import TYPE_CHECKING
 
+from lazy_nlp_pipeline.doc import DocPosition
+from lazy_nlp_pipeline.words_analyzer import Word
+
+
 if TYPE_CHECKING:
-    from lazy_nlp_pipeline.lazy_nlp_pipeline import DocPosition, Span
+    from lazy_nlp_pipeline.doc import Doc, Span
 
 
 class RepeatedPattern:
@@ -67,10 +72,38 @@ class RepeatablePattern:
         return self
 
 
-class TokenPattern(RepeatablePattern):
+class OrPattern(RepeatablePattern):
+    def __init__(self, *subpatterns: DisjunctivePattern):
+        self.subpatterns = subpatterns
+
+    def match_from(self, doc_position: DocPosition,
+                   forward: bool = True,
+                   ) -> Generator[tuple[Span, DocPosition], None, None]:
+        """Match pattern starting from doc_position either forward or backward"""
+        for sp in self.subpatterns:
+            yield from sp.match_from(doc_position, forward=forward)
+
+    def __or__(self, other: DisjunctivePattern) -> OrPattern:
+        if isinstance(other, DisjunctivePattern):
+            return OrPattern(*self.subpatterns, other)
+        return NotImplemented
+
+
+class DisjunctivePattern(ABC):
+    def __or__(self, other: DisjunctivePattern) -> OrPattern:
+        if isinstance(other, DisjunctivePattern):
+            return OrPattern(self, other)
+        return NotImplemented
+
+    @abstractmethod
+    def match_from(self, doc_position: DocPosition,
+                   forward: bool = True,
+                   ) -> Generator[tuple[Span, DocPosition], None, None]: ...
+
+
+class TokenPattern(RepeatablePattern, DisjunctivePattern):
     def __init__(self,
                  text: str | None = None,
-                 lemma: str | None = None,
 
                  ignore_case: bool = False,
 
@@ -86,10 +119,6 @@ class TokenPattern(RepeatablePattern):
         self.text = text
         if text is not None:
             self.to_check.append('text')
-
-        self.lemma = lemma
-        if lemma is not None:
-            self.to_check.append('lemma')
 
         self.ignore_case = ignore_case
 
@@ -126,12 +155,9 @@ class TokenPattern(RepeatablePattern):
                     pattern_text = self.text
                     token_text = token.text
                     if self.ignore_case:
-                        pattern_text = pattern_text.lower()
+                        pattern_text = pattern_text.lower()  # type: ignore
                         token_text = token_text.lower()
                     if token_text != pattern_text:
-                        return
-                case 'lemma':
-                    if token.lemma != self.lemma:
                         return
                 case 'isalpha':
                     if token.text.isalpha() != self.isalpha:
@@ -143,10 +169,10 @@ class TokenPattern(RepeatablePattern):
                     if token.text.isspace() != self.isspace:
                         return
                 case 'min_len':
-                    if len(token.text) < self.min_len:
+                    if len(token.text) < self.min_len:  # type: ignore
                         return
                 case 'max_len':
-                    if len(token.text) > self.max_len:
+                    if len(token.text) > self.max_len:  # type: ignore
                         return
                 case _:
                     raise Exception(f'Unexpected rule to check: {rule!r}')
@@ -155,17 +181,10 @@ class TokenPattern(RepeatablePattern):
             next_position = token.end_position
         yield token.to_span(), next_position
 
-    def __or__(self, other: TokenPattern | Pattern) -> OrPattern:
-        if isinstance(other, (TokenPattern, Pattern)):
-            return OrPattern(self, other)
-        return NotImplemented
-
     def __repr__(self) -> str:
         flags = []
         if self.text is not None:
             flags.append(f'text={self.text!r}')
-        if self.lemma is not None:
-            flags.append(f'lemma={self.lemma!r}')
         if self.isalpha is not None:
             flags.append('isalpha' if self.isalpha else '~isalpha')
         if self.isnumeric is not None:
@@ -178,25 +197,78 @@ class TokenPattern(RepeatablePattern):
         return ans
 
 
-class OrPattern(RepeatablePattern):
-    def __init__(self, *subpatterns: Pattern | TokenPattern):
-        self.subpatterns = subpatterns
+class WordPattern(RepeatablePattern, DisjunctivePattern):
+    def __init__(self,
+                 text: str | None = None,
+                 ignore_case: bool = False,
+                 lemma: str | None = None,
+                 pos: str | None = None,
+                 lang: str | None = None,
+                 ):
+        self.to_check = []
+
+        self.text = text
+        if text is not None:
+            self.to_check.append('text')
+        self.ignore_case = ignore_case
+
+        self.lemma = lemma
+        if lemma is not None:
+            self.to_check.append('lemma')
+        self.pos = pos
+        if pos is not None:
+            self.to_check.append('pos')
+        self.lang = lang
+        if lang is not None:
+            self.to_check.append('lang')
 
     def match_from(self, doc_position: DocPosition,
                    forward: bool = True,
                    ) -> Generator[tuple[Span, DocPosition], None, None]:
         """Match pattern starting from doc_position either forward or backward"""
-        for sp in self.subpatterns:
-            yield from sp.match_from(doc_position, forward=forward)
+        if forward:
+            token = doc_position.token_ahead
+            if token is None:
+                return
+            words = token.words_starting_here
+        else:
+            token = doc_position.token_behind
+            if token is None:
+                return
+            words = token.words_ending_here
+        for w in words:
+            if self.pass_guards(w):
+                next_position = doc_position.doc[w.start_char]
+                if forward:
+                    next_position = doc_position.doc[w.end_char]
+                yield doc_position.doc[w.start_char:w.end_char], next_position
 
-    def __or__(self, other: TokenPattern | Pattern) -> OrPattern:
-        # TODO: just check that other is Matchable or something
-        if isinstance(other, (TokenPattern, Pattern)):
-            return OrPattern(*self.subpatterns, other)
-        return NotImplemented
+    def pass_guards(self, word: Word) -> bool:
+        for rule in self.to_check:
+            match rule:
+                case 'text':
+                    pattern_text = self.text
+                    word_text = word.text
+                    if self.ignore_case:
+                        pattern_text = pattern_text.lower()  # type: ignore
+                        word_text = word_text.lower()
+                    if word_text != pattern_text:
+                        return False
+                case 'lemma':
+                    if word.lemma != self.lemma:
+                        return False
+                case 'pos':
+                    if word.pos != self.pos:
+                        return False
+                case 'lang':
+                    if word.lang != self.lang:
+                        return False
+                case _:
+                    raise Exception(f'Unexpected rule to check: {rule!r}')
+        return True
 
 
-class Pattern(RepeatablePattern):
+class Pattern(RepeatablePattern, DisjunctivePattern):
     def __init__(self, *subpatterns: Pattern | TokenPattern,
                  allow_inbetween: Pattern | str | None = 'SPACES',
                  # force_inbetween: bool = False, # TODO: force `allow_inbetween` to match exactly once
@@ -223,7 +295,7 @@ class Pattern(RepeatablePattern):
         """Yield all matches within the Doc"""
         # TODO: check guards w\o tokenizing
 
-        for token in doc:
+        for token in doc.tokens:
             if token.start_char == 0:
                 position = token.start_position
                 for matched, next_token in self.match_from(position, forward=forward):
@@ -294,8 +366,3 @@ class Pattern(RepeatablePattern):
                             continue
                         yielded.append(span)
                         yield span, after_next_position
-
-    def __or__(self, other: TokenPattern | Pattern) -> OrPattern:
-        if isinstance(other, (TokenPattern, Pattern)):
-            return OrPattern(self, other)
-        return NotImplemented
