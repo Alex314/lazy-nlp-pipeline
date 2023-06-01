@@ -107,7 +107,7 @@ class WordsAnalyzer:
 
     def match_to_word(self, match, start_char: int, end_char: int):
         return Word(match.word, start_char, end_char,
-                    lemma=match.normal_form, pos=match.tag.POS,
+                    lemma=match.normal_form, pos=str(match.tag.POS),
                     lang=self.lang, score=match.score)
 
 

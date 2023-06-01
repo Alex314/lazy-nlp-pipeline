@@ -16,3 +16,8 @@ class WithLazyAttributes:
             return self.lazy_attributes[name]
         self.nlp.eval_lazy_attribute(self, name)
         return self.lazy_attributes[name]
+    
+    # Required to be able to pickle objects with custom __getattr__
+    # which is needed to use multiprocessing
+    def __setstate__(self, data):
+        self.__dict__.update(data)

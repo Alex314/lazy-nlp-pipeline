@@ -1,4 +1,5 @@
 from __future__ import annotations
+from abc import ABC, abstractmethod
 from collections.abc import Generator, Sequence
 from typing import TYPE_CHECKING
 
@@ -71,7 +72,36 @@ class RepeatablePattern:
         return self
 
 
-class TokenPattern(RepeatablePattern):
+class OrPattern(RepeatablePattern):
+    def __init__(self, *subpatterns: DisjunctivePattern):
+        self.subpatterns = subpatterns
+
+    def match_from(self, doc_position: DocPosition,
+                   forward: bool = True,
+                   ) -> Generator[tuple[Span, DocPosition], None, None]:
+        """Match pattern starting from doc_position either forward or backward"""
+        for sp in self.subpatterns:
+            yield from sp.match_from(doc_position, forward=forward)
+
+    def __or__(self, other: DisjunctivePattern) -> OrPattern:
+        if isinstance(other, DisjunctivePattern):
+            return OrPattern(*self.subpatterns, other)
+        return NotImplemented
+
+
+class DisjunctivePattern(ABC):
+    def __or__(self, other: DisjunctivePattern) -> OrPattern:
+        if isinstance(other, DisjunctivePattern):
+            return OrPattern(self, other)
+        return NotImplemented
+
+    @abstractmethod
+    def match_from(self, doc_position: DocPosition,
+                   forward: bool = True,
+                   ) -> Generator[tuple[Span, DocPosition], None, None]: ...
+
+
+class TokenPattern(RepeatablePattern, DisjunctivePattern):
     def __init__(self,
                  text: str | None = None,
 
@@ -151,11 +181,6 @@ class TokenPattern(RepeatablePattern):
             next_position = token.end_position
         yield token.to_span(), next_position
 
-    def __or__(self, other: TokenPattern | Pattern) -> OrPattern:
-        if isinstance(other, (TokenPattern, Pattern)):
-            return OrPattern(self, other)
-        return NotImplemented
-
     def __repr__(self) -> str:
         flags = []
         if self.text is not None:
@@ -172,7 +197,7 @@ class TokenPattern(RepeatablePattern):
         return ans
 
 
-class WordPattern(RepeatablePattern):
+class WordPattern(RepeatablePattern, DisjunctivePattern):
     def __init__(self,
                  text: str | None = None,
                  ignore_case: bool = False,
@@ -243,25 +268,7 @@ class WordPattern(RepeatablePattern):
         return True
 
 
-class OrPattern(RepeatablePattern):
-    def __init__(self, *subpatterns: Pattern | TokenPattern):
-        self.subpatterns = subpatterns
-
-    def match_from(self, doc_position: DocPosition,
-                   forward: bool = True,
-                   ) -> Generator[tuple[Span, DocPosition], None, None]:
-        """Match pattern starting from doc_position either forward or backward"""
-        for sp in self.subpatterns:
-            yield from sp.match_from(doc_position, forward=forward)
-
-    def __or__(self, other: TokenPattern | Pattern) -> OrPattern:
-        # TODO: just check that other is Matchable or something
-        if isinstance(other, (TokenPattern, Pattern)):
-            return OrPattern(*self.subpatterns, other)
-        return NotImplemented
-
-
-class Pattern(RepeatablePattern):
+class Pattern(RepeatablePattern, DisjunctivePattern):
     def __init__(self, *subpatterns: Pattern | TokenPattern,
                  allow_inbetween: Pattern | str | None = 'SPACES',
                  # force_inbetween: bool = False, # TODO: force `allow_inbetween` to match exactly once
@@ -359,8 +366,3 @@ class Pattern(RepeatablePattern):
                             continue
                         yielded.append(span)
                         yield span, after_next_position
-
-    def __or__(self, other: TokenPattern | Pattern) -> OrPattern:
-        if isinstance(other, (TokenPattern, Pattern)):
-            return OrPattern(self, other)
-        return NotImplemented
