@@ -8,7 +8,6 @@ class TestPatterns(unittest.TestCase):
         self.nlp = NLP('test_project')
 
     def assert_pattern_cases(self, pattern, cases):
-        # TODO: test forward and backward
         for backward in [False, True]:
             for s, expected in cases:
                 with self.subTest(backward=backward, source_str=s, expected_matches=expected):

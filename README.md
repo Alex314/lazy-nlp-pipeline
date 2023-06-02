@@ -17,7 +17,9 @@ See example and comparison with Spacy in Example.ipynb
 - Basic example
 
 ```python
-from lazy_nlp_pipeline import NLP, Pattern as P, TokenPattern as TP
+from lazy_nlp_pipeline import (NLP, Pattern as P,
+                               TokenPattern as TP, WordPattern as WP,
+                               )
 
 nlp = NLP(project_name='simplest_token_patterns')
 
@@ -89,7 +91,7 @@ from lazy_nlp_pipeline import NLP, Pattern as P, TokenPattern as TP
 nlp = NLP(project_name='simplest_token_patterns')
 
 pattern = P(
-    TP(lemma='общедоступный'),
+    WP(lemma='общедоступный'),
     TP(isspace=False)[1:],
 )
 
