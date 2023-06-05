@@ -33,7 +33,7 @@ class Doc(WithLazyAttributes):
                 if lower is None:
                     lower = 0
                 if upper is None:
-                    upper = len(self)
+                    upper = len(self.text)
                 return Span(doc=self, start_char=lower, end_char=upper)
         return NotImplemented
 

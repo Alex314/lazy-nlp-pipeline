@@ -23,8 +23,6 @@ class NLP:
         analyzers_dict_factory: Callable[[], defaultdict] = partial(defaultdict, list)
         self.analyzers: defaultdict[type, defaultdict[str, list[Any]]  # TODO: list[Analyzer]
                                 ] = defaultdict(analyzers_dict_factory)
-        if analyzers is None:
-            analyzers = []
         for a in analyzers:
             self.add_analyzer(a)
 
@@ -44,11 +42,17 @@ class NLP:
         if not is_attr_evaluated:
             raise AttributeError(f'{self} have no analyzer for attribute '
                                  f'{attribute_name!r} of class {target.__class__.__name__}')
+    
+    def read_lines(self, fpath) -> Generator[Doc, None, None]:
+        """Read file, make Doc from every line"""
+        with open(fpath) as f:
+            for L in f:
+                yield self(L.removesuffix('\n'))
 
     def match_patterns(self,
                        patterns: Iterable,
                        texts: Collection[Doc | str],
-                       backward: bool = False,  # TODO: rewrite
+                       backward: bool = False,  # TODO: rewrite match_patterns
                        ) -> Generator[Span, None, None]:
         """Yield all different occurences of each pattern in each text
 
@@ -72,7 +76,7 @@ class NLP:
         So far only "SPACES" is hardcoded, to use as default `allow_inbetween` in Pattern class.
         """
         if pattern_name == 'SPACES':
-            return TokenPattern(isspace=True)
+            return TokenPattern(isspace=True)[:]
 
     def __call__(self, text: str) -> Doc:
         """Create Doc from str"""
