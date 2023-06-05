@@ -55,7 +55,7 @@ class TestPatterns(unittest.TestCase):
             TP('0'),
             TP('0'),
 
-            allow_inbetween=TP(':'),
+            allow_inbetween=TP(':')[1:],
         )
 
         src_match_pairs = [

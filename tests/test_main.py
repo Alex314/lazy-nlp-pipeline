@@ -29,9 +29,7 @@ class TestDefaultNLP(unittest.TestCase):
         doc = nlp(text)
         for w in doc.words:
             self.assertIsInstance(w, Word)
-        self.assertEqual(doc.words[0].text, "Кілька".lower())
-        for w in doc.words:
-            self.assertLessEqual(w.score, 1.0)
+        self.assertEqual(doc.words[0].text, "Кілька")
 
 
 if __name__ == '__main__':

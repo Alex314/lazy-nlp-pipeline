@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Generator, Sequence
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from lazy_nlp_pipeline.doc import DocPosition
 from lazy_nlp_pipeline.words_analyzer import Word
@@ -200,27 +200,18 @@ class TokenPattern(RepeatablePattern, DisjunctivePattern):
 class WordPattern(RepeatablePattern, DisjunctivePattern):
     def __init__(self,
                  text: str | None = None,
-                 ignore_case: bool = False,
-                 lemma: str | None = None,
-                 pos: str | None = None,
-                 lang: str | None = None,
+                 ignore_case: bool = False,  # TODO: test
+                 **kwargs
                  ):
-        self.to_check = []
+        self.to_check: list[str|tuple[str, Any]] = []
 
         self.text = text
         if text is not None:
             self.to_check.append('text')
         self.ignore_case = ignore_case
 
-        self.lemma = lemma
-        if lemma is not None:
-            self.to_check.append('lemma')
-        self.pos = pos
-        if pos is not None:
-            self.to_check.append('pos')
-        self.lang = lang
-        if lang is not None:
-            self.to_check.append('lang')
+        for k, v in kwargs.items():
+            self.to_check.append((k, v))
 
     def match_from(self, doc_position: DocPosition,
                    forward: bool = True,
@@ -254,14 +245,8 @@ class WordPattern(RepeatablePattern, DisjunctivePattern):
                         word_text = word_text.lower()
                     if word_text != pattern_text:
                         return False
-                case 'lemma':
-                    if word.lemma != self.lemma:
-                        return False
-                case 'pos':
-                    if word.pos != self.pos:
-                        return False
-                case 'lang':
-                    if word.lang != self.lang:
+                case attribute_name, value:
+                    if getattr(word, attribute_name) != value:
                         return False
                 case _:
                     raise Exception(f'Unexpected rule to check: {rule!r}')
@@ -271,7 +256,6 @@ class WordPattern(RepeatablePattern, DisjunctivePattern):
 class Pattern(RepeatablePattern, DisjunctivePattern):
     def __init__(self, *subpatterns: Pattern | TokenPattern,
                  allow_inbetween: Pattern | str | None = 'SPACES',
-                 # force_inbetween: bool = False, # TODO: force `allow_inbetween` to match exactly once
                  as_attribute: str | None = None,
                  ):
         """Matches sequence of subpatterns with any quantity of `allow_inbetween` between them
@@ -285,9 +269,6 @@ class Pattern(RepeatablePattern, DisjunctivePattern):
         if len(subpatterns) == 0:
             raise ValueError(f'Should be at least one subpattern')
         self.subpatterns = subpatterns
-
-        if isinstance(allow_inbetween, (Pattern, TokenPattern, OrPattern)):
-            allow_inbetween = allow_inbetween[:]
         self.allow_inbetween = allow_inbetween
         self.as_attribute = as_attribute
 
@@ -333,8 +314,7 @@ class Pattern(RepeatablePattern, DisjunctivePattern):
             if forward:
                 stm = subpatterns_to_match[1:]
             if isinstance(self.allow_inbetween, str):
-                self.allow_inbetween = doc_position.doc.nlp.get_pattern(self.allow_inbetween)[
-                    :]
+                self.allow_inbetween = doc_position.doc.nlp.get_pattern(self.allow_inbetween)
             if self.allow_inbetween is None:
                 for matched_next, after_next_position in self.match_from(next_position, forward=forward,
                                                                          subpatterns_to_match=stm):
