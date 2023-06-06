@@ -1,14 +1,65 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from collections.abc import Generator, Sequence
+from collections import defaultdict
+from collections.abc import Generator, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from lazy_nlp_pipeline.doc import DocPosition
+from lazy_nlp_pipeline.doc import Doc, DocPosition
 from lazy_nlp_pipeline.words_analyzer import Word
 
 
 if TYPE_CHECKING:
-    from lazy_nlp_pipeline.doc import Doc, Span
+    from lazy_nlp_pipeline.base_classes import WithLazyAttributes
+    from lazy_nlp_pipeline.doc import Span
+
+
+class PatternAnalyzer:
+    targets: list[tuple[type[WithLazyAttributes], str]] = [
+        (Doc, 'find_tags'),
+    ]
+
+    def __init__(self) -> None:
+        self.tag_patterns: defaultdict[str, list[tuple[Pattern, Mapping]]] = defaultdict(list)
+
+    def add_tag(self, tag, pattern, confidence=1.0):
+        self.tag_patterns[tag].append((pattern, dict(confidence=confidence)))
+
+    def eval_attribute(self, target: Doc, name: str) -> None:
+        match target, name:
+            case doc, 'find_tags':
+                self.eval_find_tags(doc)
+
+    def eval_find_tags(self, doc: Doc):
+        def find_doc_tags(tags: Iterable[str], min_conf=0.0):
+            """Could yield more spans (with different conf) then actually written in doc.tags"""
+            yielded_spans = []
+            for t in tags:
+                for pattern, specs in self.tag_patterns[t]:
+                    if specs['confidence'] < min_conf:
+                        continue
+                    for span in pattern.match(doc):
+                        span.attributes['tag'] = t
+                        span.attributes['conf'] = specs['confidence']
+
+                        for s in doc.tags[t]:
+                            if (span.start_char == s.start_char
+                                and span.end_char == s.end_char
+                                and {k:v for k,v in span.attributes.items() if not k == 'conf'}
+                                    == {k:v for k,v in s.attributes.items() if not k == 'conf'}):
+                                if s.attributes['conf'] < span.attributes['conf']:
+                                    s.attributes['conf'] = span.attributes['conf']
+                                break
+                        else:
+                            doc.tags[t].append(span)
+                        if span not in yielded_spans:
+                            yielded_spans.append(span)
+                            yield span
+        if 'find_tags' not in doc.lazy_attributes:
+            doc.lazy_attributes['find_tags'] = find_doc_tags
+        else:
+            raise AttributeError(f'doc.find_tags already implemented for {doc=}'
+                                 f' Check {doc.nlp}.analyzers, {self.__class__.__name__}'
+                                 f' should be the only one which supplies Doc.find_tags')
 
 
 class RepeatedPattern:
@@ -69,7 +120,6 @@ class RepeatablePattern:
             case _:
                 raise TypeError(
                     f'Pattern quantifier should be int or slice. Got {arity!r}')
-        return self
 
 
 class OrPattern(RepeatablePattern):
@@ -203,7 +253,7 @@ class WordPattern(RepeatablePattern, DisjunctivePattern):
                  ignore_case: bool = False,  # TODO: test
                  **kwargs
                  ):
-        self.to_check: list[str|tuple[str, Any]] = []
+        self.to_check: list[str | tuple[str, Any]] = []
 
         self.text = text
         if text is not None:

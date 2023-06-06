@@ -32,6 +32,7 @@ class Word(WithLazyAttributes):
         if normalized_text is None:
             normalized_text = text
         self.normalized_text = normalized_text
+        self.is_capitalized = self.text[:1].isupper()
 
     def __repr__(self) -> str:
         flags = [
