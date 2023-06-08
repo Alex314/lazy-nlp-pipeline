@@ -40,7 +40,8 @@ class PatternAnalyzer:
                     for span in pattern.match(doc):
                         span.attributes['tag'] = t
                         span.attributes['conf'] = specs['confidence']
-
+                        
+                        # TODO: rewrite filtering
                         for s in doc.tags[t]:
                             if (span.start_char == s.start_char
                                 and span.end_char == s.end_char
