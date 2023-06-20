@@ -1,6 +1,9 @@
 from __future__ import annotations
-from collections.abc import Mapping
+from collections import defaultdict
+from collections.abc import Mapping, Collection
 from typing import TYPE_CHECKING, Any, overload
+
+from spacy import displacy
 
 from lazy_nlp_pipeline.base_classes import WithLazyAttributes
 
@@ -17,6 +20,36 @@ class Doc(WithLazyAttributes):
                  ):
         super().__init__(nlp)
         self.text = text
+        self.tags: defaultdict[str, list[Span]] = defaultdict(list)
+
+    def render(self, tags: Collection[str] | None = None):
+        spans_to_show = []
+        breaking_chars = [0]
+        # TODO: split_by_tokens: bool, if True, add boundaries of tokens
+        for tag, tag_spans in self.tags.items():
+            if tags is not None and tag not in tags:
+                continue
+            for s in tag_spans:
+                spans_to_show.append((tag, s))
+                breaking_chars.extend([s.start_char, s.end_char])
+        breaking_chars.append(len(self.text))
+        breaking_chars = sorted(set(breaking_chars))
+
+        ch_to_idx = {}
+        for i, bch in enumerate(breaking_chars):
+            ch_to_idx[bch] = i
+
+        spans = []
+        for tag, s in spans_to_show:
+            spans.append({"start_token": ch_to_idx[s.start_char],
+                          "end_token": ch_to_idx[s.end_char],
+                          "label": tag})
+
+        tokens = [self.text[s:e]
+                  for s, e in zip(breaking_chars[:-1], breaking_chars[1:])]
+
+        return displacy.render({'text': self.text, 'spans': spans,
+                                'tokens': tokens}, style='span', manual=True)
 
     @overload
     def __getitem__(self, key: int) -> DocPosition: ...
