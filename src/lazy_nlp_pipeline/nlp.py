@@ -1,7 +1,8 @@
 from collections import defaultdict
 from functools import partial
 import logging
-from typing import Any, Callable, Collection, Generator, Iterable
+import re
+from typing import Any, Callable, Collection, Generator, Iterable, Literal
 
 from lazy_nlp_pipeline.doc import Doc, Span
 from lazy_nlp_pipeline.patterns import TokenPattern
@@ -59,7 +60,70 @@ class NLP:
         with open(fpath) as f:
             for L in f:
                 yield self(L.removesuffix('\n'))
-    
+
+    def read_common_crawl(self,
+                          data_folder='./common_crawl_data',
+                          crawl_ids: Collection[str] | Literal['latest', 'all'] = 'latest',
+                          surt_prefix: str = '',
+                          download_collinfo_json: bool = True,
+                          download_cluster_idxs: bool = False,
+                          download_cdx: bool = False,
+                          remove_html: bool = True,
+                          clean_spaces: bool = True,
+                          ) -> Generator[Doc, None, None]:
+        """Read documents from Common Crawl dataset.
+
+        Yield docs with warc_headers and http_headers attributes.
+        Match all CC records by surt_prefix from crawls given by crawl_ids.
+        Cache used indexes in data_folder, reuses already present files.
+        Fails if unable to download some index file.
+        Loads all index files first, then one-by-one loads and yields pages.
+        WARC files are not downloaded fully (only required segments), neither cached.
+        Require warcio and urllib packages to be installed.
+        If remove_html is True - also require beautifulsoup4
+        params:
+        data_folder: path for caching CC data
+        crawl_ids: if 'latest' or 'all' - will take last/all of available crawls
+            if collection of strings - will look for those specific crawls
+            i.e. crawl_ids = ['CC-MAIN-2008-2009', 'CC-MAIN-2023-14']
+        surt_prefix: Sort-friendly URI Reordering Transform prefix to match CC records
+            i.e. surt_prefix = 'ua,olx,'
+        download_collinfo_json: allow to download collinfo.json if no cached
+        download_cluster_idxs: allow to download cluster.idx if no cached
+        download_cdx: allow to download cdx-XX.gz if no cached
+        remove_html: if True - only text will be extracted from source HTML
+            if False - raw page will be yielded.
+        clean_spaces: if True - strip each line of doc
+            and remove \n when more than 2 in a row
+        """
+        from lazy_nlp_pipeline.read.common_crawl import (cc_get_crawl_ids,
+                                                         cc_get_cluster_idx_records,
+                                                         cc_get_cdx_records,
+                                                         cc_get_warc_records,
+                                                         )
+        if isinstance(crawl_ids, str):
+            crawl_ids = cc_get_crawl_ids(data_folder, download_collinfo_json, crawl_ids)
+            logging.info(f'Loaded crawl ids: {crawl_ids}')
+
+        cluster_idx_records = cc_get_cluster_idx_records(crawl_ids, surt_prefix, data_folder,
+                                                         download_cluster_idxs)
+
+        cdx_records = cc_get_cdx_records(cluster_idx_records, data_folder, download_cdx)
+
+        newlines_regex = re.compile(r'\n{3,}')
+        for warc_headers, http_headers, content in cc_get_warc_records(cdx_records):
+            if remove_html:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(content)
+                content = soup.get_text()
+            if clean_spaces:
+                content = '\n'.join([i.strip() for i in content.split('\n')])
+                content = newlines_regex.sub('\n\n', content).strip()
+            doc = self(content)
+            doc.lazy_attributes['warc_headers'] = warc_headers
+            doc.lazy_attributes['http_headers'] = http_headers
+            yield doc
+
     def read_brat(self, fpath_txt, fpath_ann, on_mismatch='skip_doc') -> Generator[Doc, None, None]:
         """Read pair of files in brat fromat: https://brat.nlplab.org/standoff.html"""
         with open(fpath_txt) as f:
@@ -82,7 +146,7 @@ class NLP:
             doc.tags[tag].append(span)
         yield doc
 
-    def read_conllu(self, fpath, drop_failed_tokens: bool=True) -> Generator[Doc, None, None]:
+    def read_conllu(self, fpath, drop_failed_tokens: bool = True) -> Generator[Doc, None, None]:
         import conllu
 
         with open(fpath) as f:
