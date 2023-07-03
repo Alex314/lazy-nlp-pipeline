@@ -73,7 +73,10 @@ class Doc(WithLazyAttributes):
     def __repr__(self) -> str:
         flags = [self.nlp.project_name]
         flags.append(' '.join(self.lazy_attributes))
-        ans = f'{type(self).__name__}({self.text!r})[{" ".join(flags)}]'
+        text = repr(self.text)
+        if len(self.text) > 100:
+            text = repr(self.text[:97]) + '...'
+        ans = f'{type(self).__name__}({text})[{" ".join(flags)}]'
         return ans
 
 
