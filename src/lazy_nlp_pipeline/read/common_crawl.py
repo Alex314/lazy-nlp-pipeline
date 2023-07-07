@@ -79,6 +79,7 @@ def cc_get_cdx_records(cluster_idx_records, data_folder='./',
         if not os.path.isfile(cdx_fpath):
             cdx_url = f'https://data.commoncrawl.org/cc-index/collections/{crawl_id}/indexes/{cdx_fname}'
             cdx_to_download.append((cdx_url, cdx_fpath))
+    cdx_to_download = list(set(cdx_to_download))
 
     for cdx_url, cdx_fpath in tqdm(cdx_to_download, desc='Downloading cdx-XX.gz files', leave=False):
         if not download_cdx:

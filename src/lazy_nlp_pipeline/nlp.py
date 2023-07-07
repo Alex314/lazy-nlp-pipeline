@@ -1,8 +1,10 @@
 from collections import defaultdict
+from collections.abc import Collection, Generator, Iterable, Mapping
 from functools import partial
+import json
 import logging
 import re
-from typing import Any, Callable, Collection, Generator, Iterable, Literal
+from typing import Any, Callable, Literal
 
 from lazy_nlp_pipeline.doc import Doc, Span
 from lazy_nlp_pipeline.patterns import TokenPattern
@@ -60,6 +62,31 @@ class NLP:
         with open(fpath) as f:
             for L in f:
                 yield self(L.removesuffix('\n'))
+
+    def read_jsonl(self, fpath, text_field='text') -> Generator[Doc, None, None]:
+        with open(fpath) as f:
+            for L in f:
+                data = json.loads(L)
+                if isinstance(data, str):
+                    yield self(data)
+                    continue
+                if not isinstance(data, dict):
+                    raise TypeError(f'.jsonl line should be str or dict, got {L!r}')
+                doc = self(data.pop(text_field))
+                doc.lazy_attributes |= data
+                yield doc
+
+    def to_jsonl(self, docs: Iterable[Doc], fpath, text_field: str = 'text',
+                 additional_fields: Iterable[str] | Mapping[str, Callable] | None = None) -> None:
+        with open(fpath, 'w') as f:
+            for doc in docs:
+                dct = {text_field: doc.text}
+                if isinstance(additional_fields, Mapping):
+                    dct |= {key: f(doc) for key, f in additional_fields.items()}
+                elif isinstance(additional_fields, Iterable):
+                    dct |= {key: doc.lazy_attributes[key]
+                            for key in additional_fields if key in doc.lazy_attributes}
+                f.write(json.dumps(dct, ensure_ascii=False) + '\n')
 
     def read_common_crawl(self,
                           data_folder='./common_crawl_data',
